@@ -154,8 +154,10 @@ HEADER
 The header contains a list of lengths for every entry in the list.
 
 Since the lenghts are VARINTs you must parse each length in order to determine the size of the array.
+
 While you can skip to different values in the array after parsing the header there it still no way
-to skip to parse the length of a particular offset without parsing the entire header. This is another
-example of a tradeoff, we're sacrificing decode speed for simplicity and portability.
+to skip to parse the length of a particular offset without parsing sequentially through the header
+until you arrive at the desired offset. This is another example of a tradeoff, we're sacrificing
+decode speed for simplicity and portability.
 
 
