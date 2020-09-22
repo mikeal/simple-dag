@@ -58,21 +58,24 @@ const encoder = obj => {
   if (obj instanceof Uint8Array) {
     return [TYPE_BINARY, ...obj]
   }
+  if (typeof obj === 'string') {
+    return [TYPE_STRING, encodeString(obj)]
+  }
   if (obj.asCID === obj) {
     return [TYPE_LINK, ...obj.bytes.byteLength, ...obj.bytes]
   }
   if (typeof obj === 'number') {
     if (isFloat(obj)) {
       if (obj < 0) {
-        return [4, ...floatToDouble(obj * -1).flat()]
+        return [TYPE_SIGNED_FLOAT, ...floatToDouble(obj * -1).flat()]
       } else {
-        return [3, ...floatToDouble(obj).flat()]
+        return [TYPE_FLOAT, ...floatToDouble(obj).flat()]
       }
     } else {
       if (obj < 0) {
-        return [2, ...varint(obj * -1)]
+        return [TYPE_SIGNED_INTEGER, ...varint(obj * -1)]
       } else {
-        return [1, ...varint(obj)]
+        return [TYPE_INTEGER, ...varint(obj)]
       }
     }
   }
@@ -83,7 +86,7 @@ const encoder = obj => {
       let header = lengths.map(l => vencode(l))
       values = values.flat()
       header = header.flat()
-      return [8, ...vencode(header.length), ...vencode(values.length), ...header, ...values]
+      return [TYPE_LIST, ...vencode(header.length), ...vencode(values.length), ...header, ...values]
     } else {
       let keys = Object.keys(obj).sort()
       let values = keys.map(k => encoder(obj[k]))
@@ -93,7 +96,7 @@ const encoder = obj => {
       keys = keys.flat()
       values = values.flat()
       const lengths = [...vencode(header.length), ...vencode(keys.length), ...vencode(values.length)]
-      return [7, ...lengths, ...header, ...keys, ...values]
+      return [TYPE_MAP, ...lengths, ...header, ...keys, ...values]
     }
   }
 }
