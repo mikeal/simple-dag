@@ -1,0 +1,26 @@
+{
+  "name": "simple-dag",
+  "version": "0.0.0",
+  "description": "Simple DAG is a format for encoding data similar to JSON and CBOR but with a very different set of priorities.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikeal/simple-dag.git"
+  },
+  "keywords": [],
+  "author": "Mikeal Rogers <mikeal.rogers@gmail.com> (https://www.mikealrogers.com/)",
+  "license": "(Apache-2.0 AND MIT)",
+  "bugs": {
+    "url": "https://github.com/mikeal/simple-dag/issues"
+  },
+  "homepage": "https://github.com/mikeal/simple-dag#readme",
+  "devDependencies": {
+    "standard": "^14.3.4"
+  },
+  "dependencies": {
+    "multiformats": "^3.0.3"
+  }
+}

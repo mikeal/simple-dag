@@ -75,7 +75,7 @@ Tokens
 ## TYPE_LINK
 
 ```
-| 0 | CID |
+| 0 | VARINT_LENGTH | CID |
 ```
 
 ## TYPE_INTEGER
