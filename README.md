@@ -96,25 +96,25 @@ Tokens
 | 3 | MATISSA_LENGTH | VARINT
 ```
 
-### TYPE_SIGNED_FLOAT
+## TYPE_SIGNED_FLOAT
 
 ```
 | 4 | MATISSA_LENGTH | VARINT
 ```
 
-### TYPE_STRING
+## TYPE_STRING
 
 ```
 | 5 | VARINT_LENGTH | STRING
 ```
 
-### TYPE_BINARY
+## TYPE_BINARY
 
 ```
 | 6 | VARINT_LENGTH | BINARY
 ```
 
-### TYPE_MAP
+## TYPE_MAP
 
 ```
 | 7 | HEADER_VARINT_LENGTH | KEYS_VARINT_LENGTH | VALUES_VARINT_LENGTH | HEADER | KEYS | VALUES |
@@ -143,7 +143,7 @@ VALUES
 All values are written sequentially based on their corresponding key which is sorted
 following UTF8 sorting rules.
 
-### TYPE_LIST
+## TYPE_LIST
 
 ```
 | 8 | HEADER_VARINT_LENGTH | VALUES_VARINT_LENGTH | HEADER | VALUES |
