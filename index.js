@@ -20,9 +20,9 @@ const varint = {
 
 const TYPE_LINK = 0
 const TYPE_INTEGER = 1
-const TYPE_SIGNED_INTEGER = 2
+const TYPE_NEGATIVE_INTEGER = 2
 const TYPE_FLOAT = 3
-const TYPE_SIGNED_FLOAT = 4
+const TYPE_NEGATIVE_FLOAT = 4
 const TYPE_STRING = 5
 const TYPE_BINARY = 6
 const TYPE_MAP = 7
@@ -67,13 +67,13 @@ const encoder = obj => {
   if (typeof obj === 'number') {
     if (isFloat(obj)) {
       if (obj < 0) {
-        return [TYPE_SIGNED_FLOAT, ...floatToDouble(obj * -1).flat()]
+        return [TYPE_NEGATIVE_FLOAT, ...floatToDouble(obj * -1).flat()]
       } else {
         return [TYPE_FLOAT, ...floatToDouble(obj).flat()]
       }
     } else {
       if (obj < 0) {
-        return [TYPE_SIGNED_INTEGER, ...varint(obj * -1)]
+        return [TYPE_NEGATIVE_INTEGER, ...varint(obj * -1)]
       } else {
         return [TYPE_INTEGER, ...varint(obj)]
       }
@@ -174,7 +174,7 @@ const decoder = (bytes) => {
     case TYPE_INTEGER:
       val = vdecode()
       break
-    case TYPE_SIGNED_INTEGER:
+    case TYPE_NEGATIVE_INTEGER:
       val = -vdecode()
       break
     case TYPE_FLOAT:
@@ -183,7 +183,7 @@ const decoder = (bytes) => {
       int = vdecode()
       val = int / Math.pow(10, mantissa)
       break
-    case TYPE_SIGNED_FLOAT:
+    case TYPE_NEGATIVE_FLOAT:
       mantissa = bytes[i]
       i++
       int = vdecode()
