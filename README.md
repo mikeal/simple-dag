@@ -117,47 +117,45 @@ Tokens
 ## TYPE_MAP
 
 ```
-| 7 | HEADER_VARINT_LENGTH | KEYS_VARINT_LENGTH | VALUES_VARINT_LENGTH | HEADER | KEYS | VALUES |
+| 7 | KEYS_VARINT_LENGTH | VALUES_VARINT_LENGTH | KEYS | VALUES |
 ```
 
 There are key sorting rules that must be following. When parsing, if a key does not follow
 these sorting rules the decoder MUST throw.
 
-HEADER
 
-The header contains every key and value length. Each pair is written sequentially and must
-follow the ordering in the corresponding section (and each section also has strict sorting rules
-to ensure determinism).
-
-Every length is a VARINT.
+The keys and values are strictly sorted and are applied in order as entries in the map.
 
 KEYS
 
 * All keys in header must be UTF8 strings
 * All keys in header must be sorted following conventional UTF8 string sorting rules
-* All keys are written sequentially and can only be parsed by reading the lengths from
-the header section.
+* All keys are written sequentially proceeded by their length:
+
+```
+| VARINT_LENGTH | STRING_DATA |
+```
+
+Keys are not prefixed with a typing token because only strings are allowed.
 
 VALUES
 
-All values are written sequentially based on their corresponding key which is sorted
-following UTF8 sorting rules.
+VALUES contains every value proceeded by the length of value:
+
+```
+| VARINT_LENGTH | VALUE |
+```
 
 ## TYPE_LIST
 
 ```
-| 8 | HEADER_VARINT_LENGTH | VALUES_VARINT_LENGTH | HEADER | VALUES |
+| 8 | VARINT_LENGTH | VALUES |
 ```
 
-HEADER
+VARINT_LENGTH is the size of the VALUES binary section.
 
-The header contains a list of lengths for every entry in the list.
+VALUES contains every value proceeded by the length of value:
 
-Since the lenghts are VARINTs you must parse each length in order to determine the size of the array.
-
-While you can skip to different values in the array after parsing the header there it still no way
-to skip to parse the length of a particular offset without parsing sequentially through the header
-until you arrive at the desired offset. This is another example of a tradeoff, we're sacrificing
-decode speed for simplicity and portability.
-
-
+```
+| VARINT_LENGTH | VALUE |
+```

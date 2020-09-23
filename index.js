@@ -101,17 +101,6 @@ const encoder = obj => {
   }
 }
 
-const parseVarints = bytes => {
-  let i = 0
-  const ints = []
-  while (i < bytes.byteLength) {
-    const [int, len] = varint.decode(bytes.subarray(i))
-    ints.push(int)
-    i += len
-  }
-  return ints
-}
-
 const decoder = (bytes) => {
   let i = 0
   const vdecode = () => {
@@ -125,39 +114,37 @@ const decoder = (bytes) => {
     return b
   }
 
-  const decodeMap = bytes => {
-    const [hlength, klength, vlength] = [vdecode(), vdecode(), vdecode()]
-    let [header, keys, values] = [parse(hlength), parse(klength), parse(vlength)]
-    let keyIndex = 0
-    let valueIndex = 0
-    header = parseVarints(header)
-    const entries = []
-    while (header.length) {
-      const [keyLength, valueLength] = header
-      header = header.slice(2)
-      const key = keys.subarray(keyIndex, keyIndex + keyLength)
-      keyIndex += keyLength
-      const value = values.subarray(valueIndex, valueIndex + valueLength)
-      valueIndex += valueLength
-      entries.push([key, decoder(value)])
+  const decodeMap = () => {
+    const [klength, vlength] = [vdecode(), vdecode()]
+    const keyData = parse(klength)
+    const values = decodeValues(parse(vlength))
+    let i = 0
+    const keys = []
+    while (i < keyData.length) {
+      const [length, size] = varint.decode(keyData.subarray(i))
+      i += size
+      keys.push(decodeString(keyData.subarray(i, i + length)))
+      i += length
     }
-    return Object.fromEntries(entries)
+    return Object.entries(keys.map(k => [k, values.shift()]))
   }
 
-  const decodeList = bytes => {
-    const [hlength, vlength] = [vdecode(), vdecode()]
-    let [header, values] = [parse(hlength), parse(vlength)]
-    header = parseVarints(header)
-    let valueIndex = 0
+  const decodeValues = values => {
     const entries = []
-    while (header.length) {
-      const [valueLength] = header
-      header = header.slice(1)
-      const value = values.subarray(valueIndex, valueIndex + valueLength)
-      valueIndex += valueLength
-      entries.push(value)
+    let i = 0
+    while (i < values.length) {
+      const [length, size] = varint.decode(values.subarray(i))
+      i += size
+      entries.push(decoder(values.subarray(i, i + length)))
+      i += length
     }
-    return entries.map(value => decoder(value))
+    return entries
+  }
+
+  const decodeList = () => {
+    const length = vdecode()
+    const values = parse(length)
+    return decodeValues(values)
   }
 
   const token = bytes[i]
