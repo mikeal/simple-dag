@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "description": "Simple DAG is a format for encoding data similar to JSON and CBOR but with a very different set of priorities.",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

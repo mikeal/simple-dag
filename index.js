@@ -1,195 +1,145 @@
-import varints from 'varint'
-import { CID } from 'multiformats/basics'
+// import { CID } from 'multiformats/basics'
 
-const cache = new Map()
+// Based on https://github.com/paroga/cbor-js/blob/master/cbor.js
+const writeTypeAndLength = (type, length) => {
+  if (length < 24) {
+    const value = type << 5 | length
+    return [value]
+  } else if (length < 0x100) {
+    const value = type << 5 | 24
+    return [value, length]
+  } else if (length < 0x10000) {
+    const value = type << 5 | 25
+    const bytes = new DataView(new ArrayBuffer(2))
+    bytes.setUint16(0, length)
+    return [value, ...new Uint8Array(bytes.buffer)]
+  } else if (length < 0x100000000) {
+    const value = type << 5 | 26
+    const bytes = new DataView(new ArrayBuffer(4))
+    bytes.setUint32(0, length)
+    return [value, ...new Uint8Array(bytes.buffer)]
+  } else {
+    const value = type << 5 | 25
+    const bytes = new DataView(new ArrayBuffer(8))
+    bytes.setUint64(0, length)
+    return [value, ...new Uint8Array(bytes.buffer)]
+  }
+}
 
-const varint = {
-  decode: data => {
-    const code = varints.decode(data)
-    return [code, varints.decode.bytes]
-  },
-  encode: int => {
-    if (cache.has(int)) return cache.get(int)
-    const buff = Uint8Array.from(varints.encode(int))
-    cache.set(int, buff)
-    return buff
+// Based on https://github.com/paroga/cbor-js/blob/master/cbor.js
+const readLength = (data, info) => {
+  if (info < 24) {
+    return [info, 0]
+  } else if (info === 24) {
+    return [data.getUint8(0), 1]
+  } else if (info === 25) {
+    return [data.getUint16(0), 2]
+  } else if (info === 26) {
+    return [data.getUint32(0), 4]
+  } else if (info === 27) {
+    console.log(data)
+    return [data.getBigUint64(0), 8]
+  } else {
+    throw Error('Invalid length encoding')
   }
 }
 
 /* TOKENS */
 
-const TYPE_LINK = 0
-const TYPE_INTEGER = 1
-const TYPE_NEGATIVE_INTEGER = 2
-const TYPE_FLOAT = 3
-const TYPE_NEGATIVE_FLOAT = 4
-const TYPE_STRING = 5
-const TYPE_BINARY = 6
-const TYPE_MAP = 7
-const TYPE_LIST = 8
-const VALUE_NULL = 9
-const VALUE_TRUE = 10
-const VALUE_FALSE = 11
+// const TYPE_LINK = 42
+const TYPE_INTEGER = 0
+const TYPE_NEGATIVE_INTEGER = 1
+const TYPE_FLOAT = 0xfb
+const TYPE_STRING = 3
+const TYPE_BINARY = 2
+const TYPE_MAP = 5
+const TYPE_LIST = 4
+const VALUE_NULL = 0xf6
+const VALUE_TRUE = 0xf5
+const VALUE_FALSE = 0xf4
 
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
 const encodeString = str => textEncoder.encode(str)
 const decodeString = b => textDecoder.decode(b)
 
-const vencode = varint.encode
 const isFloat = n => Number(n) === n && n % 1 !== 0
 
-const floatToDouble = float => {
-  let mantissa = 0
-  while (isFloat(float)) {
-    float = float * 10
-    mantissa += 1
-  }
-  if (mantissa === 0) throw new Error('Not float')
-  return [mantissa, ...vencode(float)]
-}
-
 const encoder = obj => {
-  if (obj === null) return VALUE_NULL
+  if (obj === null) return [VALUE_NULL]
   if (typeof obj === 'boolean') {
-    if (obj) return VALUE_TRUE
-    else return VALUE_FALSE
+    if (obj) return [VALUE_TRUE]
+    else return [VALUE_FALSE]
   }
   if (obj instanceof Uint8Array) {
-    return [TYPE_BINARY, ...obj]
+    return writeTypeAndLength(TYPE_BINARY, obj.length).concat(Array.from(obj))
   }
   if (typeof obj === 'string') {
-    return [TYPE_STRING, encodeString(obj)]
+    const encoded = encodeString(obj)
+    return writeTypeAndLength(TYPE_STRING, encoded.length).concat(Array.from(encoded))
   }
-  if (obj.asCID === obj) {
-    return [TYPE_LINK, ...obj.bytes.byteLength, ...obj.bytes]
-  }
+  // if (obj.asCID === obj) {
+  //  return [TYPE_LINK, ...obj.bytes.byteLength, ...obj.bytes]
+  // }
   if (typeof obj === 'number') {
     if (isFloat(obj)) {
-      if (obj < 0) {
-        return [TYPE_NEGATIVE_FLOAT, ...floatToDouble(obj * -1).flat()]
-      } else {
-        return [TYPE_FLOAT, ...floatToDouble(obj).flat()]
-      }
+      const bytes = new DataView(new ArrayBuffer(8))
+      bytes.setFloat64(0, obj)
+      return [TYPE_FLOAT, ...new Uint8Array(bytes.buffer)]
     } else {
       if (obj < 0) {
-        return [TYPE_NEGATIVE_INTEGER, ...varint(obj * -1)]
+        return writeTypeAndLength(TYPE_NEGATIVE_INTEGER, -(obj + 1))
       } else {
-        return [TYPE_INTEGER, ...varint(obj)]
+        return writeTypeAndLength(TYPE_INTEGER, obj)
       }
     }
   }
   if (typeof obj === 'object') {
     if (Array.isArray(obj)) {
-      let values = obj.map(o => encoder(obj))
-      const lengths = values.map(v => v.length)
-      let header = lengths.map(l => vencode(l))
-      values = values.flat()
-      header = header.flat()
-      return [TYPE_LIST, ...vencode(header.length), ...vencode(values.length), ...header, ...values]
+      const values = obj.map(o => encoder(o))
+      return writeTypeAndLength(TYPE_LIST, values.length).concat(values.flat())
     } else {
-      let keys = Object.keys(obj).sort()
-      let values = keys.map(k => encoder(obj[k]))
-      keys = keys.map(k => encodeString(k))
-      const valueLengths = values.map(v => vencode(v.length))
-      const header = keys.map(k => [...vencode(k.length), ...valueLengths.shift()]).flat()
-      keys = keys.flat()
-      values = values.flat()
-      const lengths = [...vencode(header.length), ...vencode(keys.length), ...vencode(values.length)]
-      return [TYPE_MAP, ...lengths, ...header, ...keys, ...values]
+      const keys = Object.keys(obj).sort()
+      const keyValues = keys.map(k => {
+        return [encoder(k), encoder(obj[k])].flat()
+      })
+      return writeTypeAndLength(TYPE_MAP, keys.length).concat(keyValues.flat())
     }
   }
 }
 
 const decoder = (bytes) => {
   let i = 0
-  const vdecode = () => {
-    const [code, parsed] = varint.decode(bytes.subarray(i))
-    i += parsed
-    return code
-  }
   const parse = l => {
-    const b = bytes.subarray(0, l)
+    const b = bytes.subarray(i, i + l)
     i += l
     return b
   }
 
-  const decodeMap = () => {
-    const [klength, vlength] = [vdecode(), vdecode()]
-    const keyData = parse(klength)
-    const values = decodeValues(parse(vlength))
-    let i = 0
-    const keys = []
-    while (i < keyData.length) {
-      const [length, size] = varint.decode(keyData.subarray(i))
-      i += size
-      keys.push(decodeString(keyData.subarray(i, i + length)))
-      i += length
-    }
-    return Object.entries(keys.map(k => [k, values.shift()]))
+  const decodeMap = length => {
+    const list = decodeList(length * 2)
+    return Object.fromEntries(
+      // Based on https://www.w3resource.com/javascript-exercises/fundamental/javascript-fundamental-exercise-265.php
+      Array.from({ length }, (_, j) => list.slice(j * 2, j * 2 + 2))
+    )
   }
 
-  const decodeValues = values => {
+  const decodeList = length => {
     const entries = []
-    let i = 0
-    while (i < values.length) {
-      const [length, size] = varint.decode(values.subarray(i))
-      i += size
-      entries.push(decoder(values.subarray(i, i + length)))
-      i += length
+    for (let ii = 0; ii < length; ii++) {
+      const [offset, value] = decoder(bytes.subarray(i))
+      entries.push(value)
+      i += offset
     }
     return entries
   }
 
-  const decodeList = () => {
-    const length = vdecode()
-    const values = parse(length)
-    return decodeValues(values)
-  }
+  const dataView = () => new DataView(bytes.buffer, bytes.byteOffset + i)
 
   const token = bytes[i]
   i++
   let val
-  let length
-  let mantissa
-  let int
   switch (token) {
-    case TYPE_LINK:
-      length = vdecode()
-      val = CID.from(parse(length))
-      break
-    case TYPE_INTEGER:
-      val = vdecode()
-      break
-    case TYPE_NEGATIVE_INTEGER:
-      val = -vdecode()
-      break
-    case TYPE_FLOAT:
-      mantissa = bytes[i]
-      i++
-      int = vdecode()
-      val = int / Math.pow(10, mantissa)
-      break
-    case TYPE_NEGATIVE_FLOAT:
-      mantissa = bytes[i]
-      i++
-      int = vdecode()
-      val = -(int / Math.pow(10, mantissa))
-      break
-    case TYPE_STRING:
-      length = vdecode()
-      val = decodeString(parse(length))
-      break
-    case TYPE_BINARY:
-      length = vdecode()
-      val = parse(length)
-      break
-    case TYPE_MAP:
-      val = decodeMap()
-      break
-    case TYPE_LIST:
-      val = decodeList()
-      break
     case VALUE_NULL:
       val = null
       break
@@ -199,16 +149,76 @@ const decoder = (bytes) => {
     case VALUE_FALSE:
       val = false
       break
-    default:
-      throw new Error('UNKNOWN TOKEN: $token')
+    case TYPE_FLOAT:
+      val = dataView().getFloat64(0)
+      i += 8
+      break
+    default: {
+      const info = token & 0x1f
+      const [length, offset] = readLength(dataView(), info)
+      i += offset
+
+      const majorType = token >> 5
+      switch (majorType) {
+        // case TYPE_LINK:
+        //  length = vdecode()
+        //  val = CID.from(parse(length))
+        //  break
+        case TYPE_INTEGER:
+          val = length
+          break
+        case TYPE_NEGATIVE_INTEGER:
+          val = -1 - length
+          break
+        case TYPE_STRING:
+          val = decodeString(parse(length))
+          break
+        case TYPE_BINARY:
+          val = parse(length)
+          break
+        case TYPE_MAP:
+          val = decodeMap(length)
+          break
+        case TYPE_LIST:
+          val = decodeList(length)
+          break
+        default:
+          throw new Error(`UNKNOWN TOKEN: ${token}`)
+      }
+    }
   }
-  if (i < bytes.byteLength) {
-    throw new Error('Additional encoded data after value')
-  }
-  return val
+  return [i, val]
 }
 
 const encode = obj => new Uint8Array(encoder(obj))
-const decode = bytes => decoder(bytes)
+const decode = bytes => decoder(bytes)[1]
 
 export { encode, decode }
+
+const hex = (data) => {
+  return Array.from(new Uint8Array(data))
+    .map(n => n.toString(16).padStart(2, '0'))
+    .join(' ')
+}
+
+const data = {
+  hello: 'world!',
+  anarray: [1, 3, 4],
+  'with mixed types': [8.2, 1, null, true, false, 'yay'],
+  boooool: false,
+  nope: null,
+  nuuuumbers: 232434,
+  nuuuumbersfloat: 342.2134,
+  bytes: new Uint8Array([7, 8, 9]),
+  nested: {
+    amap: 'inhere',
+    yay: true,
+    araynest: [[[[1, 3]]]]
+  }
+}
+const encoded = encode(data)
+console.log(encoded)
+console.log(hex(encoded))
+
+const decoded = decode(encoded)
+console.log(decoded)
